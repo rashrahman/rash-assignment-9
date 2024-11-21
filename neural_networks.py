@@ -13,24 +13,48 @@ os.makedirs(result_dir, exist_ok=True)
 class MLP:
     def __init__(self, input_dim, hidden_dim, output_dim, lr, activation='tanh'):
         np.random.seed(0)
-        self.lr = lr # learning rate
-        self.activation_fn = activation # activation function
-        # TODO: define layers and initialize weights
+        self.lr = lr  # Learning rate
+        self.activation_fn = activation  # Activation function
+        self.activations = {'tanh': np.tanh, 
+                            'relu': lambda x: np.maximum(0, x), 
+                            'sigmoid': lambda x: 1 / (1 + np.exp(-x))}
+        self.activation_derivatives = {'tanh': lambda x: 1 - np.tanh(x) ** 2,
+                                       'relu': lambda x: (x > 0).astype(float),
+                                       'sigmoid': lambda x: self.activations['sigmoid'](x) * (1 - self.activations['sigmoid'](x))}
+        
+        # Initialize weights and biases
+        self.W1 = np.random.randn(input_dim, hidden_dim) * 0.1
+        self.b1 = np.zeros((1, hidden_dim))
+        self.W2 = np.random.randn(hidden_dim, output_dim) * 0.1
+        self.b2 = np.zeros((1, output_dim))
 
     def forward(self, X):
-        # TODO: forward pass, apply layers to input X
-        # TODO: store activations for visualization
-        out = ...
+        # Forward pass
+        self.Z1 = X @ self.W1 + self.b1
+        self.A1 = self.activations[self.activation_fn](self.Z1)  # Activation
+        self.Z2 = self.A1 @ self.W2 + self.b2
+        out = self.activations['sigmoid'](self.Z2)  # Output activation (sigmoid for binary classification)
+        self.out = out
         return out
 
     def backward(self, X, y):
-        # TODO: compute gradients using chain rule
+        # Compute gradients using chain rule
+        m = X.shape[0]
+        dZ2 = self.out - y
+        dW2 = self.A1.T @ dZ2 / m
+        db2 = np.sum(dZ2, axis=0, keepdims=True) / m
+        
+        dA1 = dZ2 @ self.W2.T
+        dZ1 = dA1 * self.activation_derivatives[self.activation_fn](self.Z1)
+        dW1 = X.T @ dZ1 / m
+        db1 = np.sum(dZ1, axis=0, keepdims=True) / m
 
-        # TODO: update weights with gradient descent
+        # Gradient descent update
+        self.W2 -= self.lr * dW2
+        self.b2 -= self.lr * db2
+        self.W1 -= self.lr * dW1
+        self.b1 -= self.lr * db1
 
-        # TODO: store gradients for visualization
-
-        pass
 
 def generate_data(n_samples=100):
     np.random.seed(0)
@@ -46,24 +70,33 @@ def update(frame, mlp, ax_input, ax_hidden, ax_gradient, X, y):
     ax_input.clear()
     ax_gradient.clear()
 
-    # perform training steps by calling forward and backward function
+    # Perform training steps
     for _ in range(10):
-        # Perform a training step
         mlp.forward(X)
         mlp.backward(X, y)
         
-    # TODO: Plot hidden features
-    hidden_features = ...
-    ax_hidden.scatter(hidden_features[:, 0], hidden_features[:, 1], hidden_features[:, 2], c=y.ravel(), cmap='bwr', alpha=0.7)
+    # Hidden features
+    hidden_features = mlp.A1
+    ax_hidden.scatter(hidden_features[:, 0], hidden_features[:, 1], c=y.ravel(), cmap='bwr', alpha=0.7)
+    ax_hidden.set_title("Hidden Layer Features")
 
-    # TODO: Hyperplane visualization in the hidden space
+    # Decision boundary in input space
+    xx, yy = np.meshgrid(np.linspace(X[:, 0].min(), X[:, 0].max(), 100),
+                         np.linspace(X[:, 1].min(), X[:, 1].max(), 100))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    preds = mlp.forward(grid).reshape(xx.shape)
+    ax_input.contourf(xx, yy, preds, levels=50, cmap="bwr", alpha=0.7)
+    ax_input.scatter(X[:, 0], X[:, 1], c=y.ravel(), cmap="bwr", edgecolor="k")
+    ax_input.set_title("Input Space Decision Boundary")
 
-    # TODO: Distorted input space transformed by the hidden layer
-
-    # TODO: Plot input layer decision boundary
-
-    # TODO: Visualize features and gradients as circles and edges 
-    # The edge thickness visually represents the magnitude of the gradient
+    # Gradient visualization
+    gradient_magnitude = np.sqrt(np.sum(mlp.W1 ** 2, axis=1))
+    for i, mag in enumerate(gradient_magnitude):
+        circle = Circle((mlp.W1[i, 0], mlp.W1[i, 1]), mag, alpha=0.5)
+        ax_gradient.add_patch(circle)
+    ax_gradient.set_xlim(-1, 1)
+    ax_gradient.set_ylim(-1, 1)
+    ax_gradient.set_title("Gradients")
 
 
 def visualize(activation, lr, step_num):
